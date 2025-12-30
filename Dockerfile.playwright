@@ -3,7 +3,7 @@ FROM lunare/n8n-runners-debian:${N8N_VERSION}
 USER root
 RUN cd /opt/runners/task-runner-python && \
     # 在这里增加了 markdown 库的安装
-    uv pip install --no-cache-dir playwright markdown Pillow imageio-ffmpeg && \
+    uv pip install --no-cache-dir playwright markdown Pillow imageio-ffmpeg numpy && \
     rm -rf /root/.cache/uv && \
     rm -rf /root/.cache/pip
 
