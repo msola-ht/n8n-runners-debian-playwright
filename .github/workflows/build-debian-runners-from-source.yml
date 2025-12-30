@@ -756,6 +756,7 @@ jobs:
             # 替换所有镜像标签中的版本号
             sed -i "s|lunare/n8n-runners-debian:[0-9.]*|lunare/n8n-runners-debian:${VERSION}|g" README.md
             sed -i "s|lunare/n8n-runners-playwright:[0-9.]*|lunare/n8n-runners-playwright:${VERSION}|g" README.md
+            sed -i "s|lunare/n8n-runners-python:[0-9.]*|lunare/n8n-runners-python:${VERSION}|g" README.md
             echo "Updated README.md with version: ${VERSION}"
             cat README.md
           fi
@@ -767,6 +768,30 @@ jobs:
           git add README.md
           git commit -m "chore: update README version to ${{ needs.get-latest-version.outputs.n8n_version }}" || echo "No changes to commit"
           git push || echo "No changes to push"
+
+      - name: Update Docker Hub README for Debian
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-debian
+          readme-path: ./README.md
+
+      - name: Update Docker Hub README for Playwright
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright
+          readme-path: ./README.md
+
+      - name: Update Docker Hub README for Python
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python
+          readme-path: ./README.md
 
       - name: Download Debian image artifacts
         id: download-debian
