@@ -123,6 +123,7 @@ RUN apt-get update && \
         curl \
         wget \
         xz-utils \
+        ffmpeg \
         && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js directly for Debian (not from Alpine)
