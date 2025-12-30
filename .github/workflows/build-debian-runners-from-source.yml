@@ -775,7 +775,7 @@ jobs:
         with:
           pattern: n8n-runners-debian-*
           path: /tmp/images
-          merge-multiple: false
+          merge-multiple: true
 
       - name: Download Playwright image artifacts
         id: download-playwright
@@ -784,7 +784,7 @@ jobs:
         with:
           pattern: n8n-runners-playwright-*
           path: /tmp/images
-          merge-multiple: false
+          merge-multiple: true
 
       - name: Download Python image artifacts
         id: download-python
@@ -793,7 +793,7 @@ jobs:
         with:
           pattern: n8n-runners-python-*
           path: /tmp/images
-          merge-multiple: false
+          merge-multiple: true
 
       - name: Check if artifacts exist
         id: check-artifacts
@@ -813,14 +813,19 @@ jobs:
           cd /tmp/images
 
           # 遍历所有 tar 文件并重命名
-          # artifact 下载后的文件名格式为：n8n-runners-{type}-{arch}.tar
-          # 需要重命名为：n8n-runners-{type}-{version}-{arch}.tar
+          # artifact 下载后的文件名可能已经包含版本号：n8n-runners-{type}-{version}-{arch}.tar
+          # 或者可能没有版本号：n8n-runners-{type}-{arch}.tar
           for file in *.tar; do
             if [ -f "$file" ]; then
-              # 使用 sed 在架构名称前插入版本号
-              new_name=$(echo "$file" | sed "s/-\(amd64\|arm64\)\.tar/-$VERSION-\1.tar/")
-              mv "$file" "$new_name"
-              echo "Renamed: $file -> $new_name"
+              # 检查文件名是否已经包含版本号
+              if echo "$file" | grep -q "${VERSION}"; then
+                echo "File already has version: $file"
+              else
+                # 使用 sed 在架构名称前插入版本号
+                new_name=$(echo "$file" | sed "s/-\(amd64\|arm64\)\.tar/-$VERSION-\1.tar/")
+                mv "$file" "$new_name"
+                echo "Renamed: $file -> $new_name"
+              fi
             fi
           done
 
