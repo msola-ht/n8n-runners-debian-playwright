@@ -4,14 +4,13 @@
 
 ## 镜像
 
-| 镜像 | 说明 | Python 库 |
-|------|------|-----------|
-| `lunare/n8n-runners-debian` | 基础镜像，支持 JavaScript 和 Python 代码执行 | - |
-| `lunare/n8n-runners-playwright` | 扩展镜像，支持浏览器自动化 | playwright + 数据处理库 |
-| `lunare/n8n-runners-python` | 扩展镜像，包含数据处理常用库 | 数据处理库 |
+| 镜像 | 基于镜像 | 新增内容 |
+|------|----------|----------|
+| `lunare/n8n-runners-debian` | - | 基础运行时（Node.js + Python） |
+| `lunare/n8n-runners-python` | Debian | 数据处理库 |
+| `lunare/n8n-runners-playwright` | Python | Playwright 浏览器自动化 |
 
 **数据处理库**包括：`markdown`、`Pillow`、`imageio-ffmpeg`、`numpy`
-
 **架构支持**：amd64、arm64
 
 ## 使用方法
@@ -63,26 +62,21 @@ docker load -i n8n-runners-python-2.1.4-arm64.tar
 
 ## 镜像详细说明
 
-### Debian 基础镜像
-- **基础系统**：Debian 11 bullseye-slim
-- **运行时**：Node.js 22 + Python 3.13
-- **支持**：JavaScript 和 Python 代码执行
-- **系统工具**：FFMPEG
+### 1. Debian 基础镜像
+**基础系统**：Debian 11 bullseye-slim
+**运行时**：Node.js 22 + Python 3.13
+**功能**：JavaScript 和 Python 代码执行
+**系统工具**：FFMPEG
 
-### Playwright 扩展镜像
-基于基础镜像，额外包含：
-- `playwright` - 浏览器自动化（支持 Chromium、Firefox、WebKit）
-- `markdown` - Markdown 处理
-- `Pillow` - 图像处理
-- `imageio-ffmpeg` - FFMPEG Python 库
-- `numpy` - 数据科学库
+### 2. Python 扩展镜像
+**基于**：Debian 基础镜像
+**新增 Python 库**：`markdown`、`Pillow`、`imageio-ffmpeg`、`numpy`
+**适用场景**：需要数据处理、图像处理、视频处理等功能
 
-### Python 扩展镜像
-基于基础镜像，额外包含：
-- `markdown` - Markdown 处理
-- `Pillow` - 图像处理
-- `imageio-ffmpeg` - FFMPEG Python 库
-- `numpy` - 数据科学库
+### 3. Playwright 扩展镜像
+**基于**：Python 扩展镜像
+**新增**：`playwright` 浏览器自动化库（支持 Chromium、Firefox、WebKit）
+**适用场景**：需要浏览器自动化、网页截图、爬虫等功能
 
 ## 构建
 
