@@ -1,0 +1,11 @@
+ARG N8N_VERSION=2.1.4
+FROM lunare/n8n-runners-debian:${N8N_VERSION}
+USER root
+RUN cd /opt/runners/task-runner-python && \
+    # 在这里增加了 markdown 库的安装
+    uv pip install --no-cache-dir markdown Pillow imageio-ffmpeg numpy && \
+    rm -rf /root/.cache/uv && \
+    rm -rf /root/.cache/pip
+
+COPY ./docker/images/runners/n8n-task-runners.json /etc/n8n-task-runners.json
+USER runner

@@ -436,6 +436,126 @@ jobs:
           echo "📍 Image: ${IMAGE_NAME}:${VERSION}"
           echo "📍 Multi-arch support: amd64, arm64"
 
+  # Step 7.5: 检查 Python 镜像是否已存在
+  check-python-image:
+    name: Check Python Docker Hub Image
+    runs-on: ubuntu-latest
+    needs: [get-latest-version, create-manifest]
+    if: |
+      always() &&
+      needs.create-manifest.result == 'success' &&
+      github.event.inputs.force_rebuild_playwright != 'true'
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+
+    steps:
+      - name: Check if Python image exists
+        id: check
+        run: |
+          IMAGE_NAME="${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python"
+          VERSION="${{ needs.get-latest-version.outputs.n8n_version }}"
+
+          echo "Checking if ${IMAGE_NAME}:${VERSION} exists..."
+
+          # 检查镜像是否存在
+          if docker manifest inspect ${IMAGE_NAME}:${VERSION} >/dev/null 2>&1; then
+            echo "Image ${IMAGE_NAME}:${VERSION} already exists"
+            echo "Skipping Python build"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          else
+            echo "Image ${IMAGE_NAME}:${VERSION} does not exist, proceeding with build"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          fi
+
+  # Step 8: 构建 Python 镜像（多架构）
+  build-python-runners:
+    name: Build Python Runners
+    runs-on: ubuntu-latest
+    needs: [get-latest-version, create-manifest, check-python-image]
+    if: |
+      always() &&
+      (
+        github.event.inputs.force_rebuild_playwright == 'true' ||
+        needs.check-python-image.result == 'success' && needs.check-python-image.outputs.should_build == 'true'
+      )
+    strategy:
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Python image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.python
+          platforms: ${{ matrix.platform }}
+          push: true
+          build-args: |
+            N8N_VERSION=${{ needs.get-latest-version.outputs.n8n_version }}
+          tags: |
+            ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${{ needs.get-latest-version.outputs.n8n_version }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/n8n-runners-python-${{ needs.get-latest-version.outputs.n8n_version }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}.tar
+
+      - name: Upload Python image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: n8n-runners-python-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          path: /tmp/n8n-runners-python-${{ needs.get-latest-version.outputs.n8n_version }}-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}.tar
+          retention-days: 7
+
+  # Step 9: 创建 Python 多架构 manifest
+  create-python-manifest:
+    runs-on: ubuntu-latest
+    needs: [get-latest-version, build-python-runners]
+    if: |
+      always() &&
+      (
+        github.event.inputs.force_rebuild_playwright == 'true' ||
+        needs.build-python-runners.result == 'success'
+      )
+
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Create and push Python multi-arch manifest
+        run: |
+          IMAGE_NAME="${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python"
+          VERSION="${{ needs.get-latest-version.outputs.n8n_version }}"
+
+          # 创建版本标签的 manifest
+          docker buildx imagetools create \
+            -t ${IMAGE_NAME}:${VERSION} \
+            ${IMAGE_NAME}:${VERSION}-amd64 \
+            ${IMAGE_NAME}:${VERSION}-arm64
+
+          echo "✅ Python Manifests created successfully!"
+          echo "📍 Image: ${IMAGE_NAME}:${VERSION}"
+          echo "📍 Multi-arch support: amd64, arm64"
+
   # Step 7.5: 仅发布 Release（手动触发，从 Docker Hub 拉取镜像）
   release-only:
     name: Release Only (Pull from Docker Hub)
@@ -496,6 +616,18 @@ jobs:
           docker save ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright:${VERSION}-arm64 -o /tmp/images/n8n-runners-playwright-${VERSION}-arm64.tar
           docker rmi ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright:${VERSION}-arm64 ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright:${VERSION}
 
+          # Python amd64
+          docker pull --platform=linux/amd64 ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}
+          docker tag ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION} ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}-amd64
+          docker save ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}-amd64 -o /tmp/images/n8n-runners-python-${VERSION}-amd64.tar
+          docker rmi ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}-amd64 ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}
+
+          # Python arm64
+          docker pull --platform=linux/arm64 ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}
+          docker tag ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION} ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}-arm64
+          docker save ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}-arm64 -o /tmp/images/n8n-runners-python-${VERSION}-arm64.tar
+          docker rmi ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}-arm64 ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}
+
           ls -la /tmp/images
 
       - name: Create Release
@@ -517,7 +649,12 @@ jobs:
             ### Playwright 扩展镜像
             - `${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright:${{ steps.version.outputs.version }}` (amd64 + arm64)
 
-            包含：`playwright` + `markdown` Python 包
+            包含：`playwright` + `markdown` + `Pillow` + `imageio-ffmpeg` Python 包
+
+            ### Python 扩展镜像
+            - `${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${{ steps.version.outputs.version }}` (amd64 + arm64)
+
+            包含：`markdown` + `Pillow` + `imageio-ffmpeg` + `numpy` Python 包
 
             ## 离线安装
 
@@ -531,6 +668,10 @@ jobs:
             # 加载 Playwright 镜像
             docker load -i n8n-runners-playwright-${{ steps.version.outputs.version }}-amd64.tar
             docker load -i n8n-runners-playwright-${{ steps.version.outputs.version }}-arm64.tar
+
+            # 加载 Python 镜像
+            docker load -i n8n-runners-python-${{ steps.version.outputs.version }}-amd64.tar
+            docker load -i n8n-runners-python-${{ steps.version.outputs.version }}-arm64.tar
             ```
 
             ## 源码
@@ -556,6 +697,15 @@ jobs:
               ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright:${{ steps.version.outputs.version }}
             ```
 
+            ### Python 镜像（包含数据处理库）
+            ```bash
+            docker run -d \
+              -e N8N_RUNNERS_AUTH_TOKEN=your-token \
+              -e N8N_RUNNERS_TASK_BROKER_URI=http://your-n8n:5679 \
+              -p 5680:5680 \
+              ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${{ steps.version.outputs.version }}
+            ```
+
             ## 拉取镜像
             ```bash
             # 拉取基础镜像
@@ -563,6 +713,9 @@ jobs:
 
             # 拉取 playwright 镜像
             docker pull ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright:${{ steps.version.outputs.version }}
+
+            # 拉取 python 镜像
+            docker pull ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${{ steps.version.outputs.version }}
             ```
           draft: false
           prerelease: false
@@ -570,14 +723,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Step 8: 创建 GitHub Release
+  # Step 10: 创建 GitHub Release
   create-release:
     runs-on: ubuntu-latest
-    needs: [get-latest-version, create-playwright-manifest]
+    needs: [get-latest-version, create-python-manifest]
     if: |
       always() &&
       (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main') &&
-      needs.create-playwright-manifest.result == 'success'
+      needs.create-python-manifest.result == 'success'
     permissions:
       contents: write
 
@@ -620,6 +773,15 @@ jobs:
         continue-on-error: true
         with:
           pattern: n8n-runners-playwright-*
+          path: /tmp/images
+          merge-multiple: false
+
+      - name: Download Python image artifacts
+        id: download-python
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: n8n-runners-python-*
           path: /tmp/images
           merge-multiple: false
 
@@ -689,6 +851,18 @@ jobs:
           docker save ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright:${VERSION}-arm64 -o /tmp/images/n8n-runners-playwright-${VERSION}-arm64.tar
           docker rmi ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright:${VERSION}-arm64 ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright:${VERSION}
 
+          # Python amd64
+          docker pull --platform=linux/amd64 ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}
+          docker tag ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION} ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}-amd64
+          docker save ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}-amd64 -o /tmp/images/n8n-runners-python-${VERSION}-amd64.tar
+          docker rmi ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}-amd64 ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}
+
+          # Python arm64
+          docker pull --platform=linux/arm64 ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}
+          docker tag ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION} ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}-arm64
+          docker save ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}-arm64 -o /tmp/images/n8n-runners-python-${VERSION}-arm64.tar
+          docker rmi ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}-arm64 ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${VERSION}
+
           ls -la /tmp/images
 
       - name: Create Release
@@ -710,7 +884,12 @@ jobs:
             ### Playwright 扩展镜像
             - `${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright:${{ needs.get-latest-version.outputs.n8n_version }}` (amd64 + arm64)
 
-            包含：`playwright` + `markdown` Python 包
+            包含：`playwright` + `markdown` + `Pillow` + `imageio-ffmpeg` Python 包
+
+            ### Python 扩展镜像
+            - `${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${{ needs.get-latest-version.outputs.n8n_version }}` (amd64 + arm64)
+
+            包含：`markdown` + `Pillow` + `imageio-ffmpeg` + `numpy` Python 包
 
             ## 离线安装
 
@@ -724,6 +903,10 @@ jobs:
             # 加载 Playwright 镜像
             docker load -i n8n-runners-playwright-${{ needs.get-latest-version.outputs.n8n_version }}-amd64.tar
             docker load -i n8n-runners-playwright-${{ needs.get-latest-version.outputs.n8n_version }}-arm64.tar
+
+            # 加载 Python 镜像
+            docker load -i n8n-runners-python-${{ needs.get-latest-version.outputs.n8n_version }}-amd64.tar
+            docker load -i n8n-runners-python-${{ needs.get-latest-version.outputs.n8n_version }}-arm64.tar
             ```
 
             ## 源码
@@ -749,6 +932,15 @@ jobs:
               ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright:${{ needs.get-latest-version.outputs.n8n_version }}
             ```
 
+            ### Python 镜像（包含数据处理库）
+            ```bash
+            docker run -d \
+              -e N8N_RUNNERS_AUTH_TOKEN=your-token \
+              -e N8N_RUNNERS_TASK_BROKER_URI=http://your-n8n:5679 \
+              -p 5680:5680 \
+              ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${{ needs.get-latest-version.outputs.n8n_version }}
+            ```
+
             ## 拉取镜像
             ```bash
             # 拉取基础镜像
@@ -756,6 +948,9 @@ jobs:
 
             # 拉取 playwright 镜像
             docker pull ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-playwright:${{ needs.get-latest-version.outputs.n8n_version }}
+
+            # 拉取 python 镜像
+            docker pull ${{ env.DOCKERHUB_USERNAME }}/n8n-runners-python:${{ needs.get-latest-version.outputs.n8n_version }}
             ```
           draft: false
           prerelease: false
