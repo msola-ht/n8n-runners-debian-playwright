@@ -17,6 +17,11 @@ on:
         required: false
         default: false
         type: boolean
+      force_rebuild_python:
+        description: 'Force rebuild Python image'
+        required: false
+        default: false
+        type: boolean
       release_only:
         description: 'Only create release (skip build)'
         required: false
@@ -444,7 +449,7 @@ jobs:
     if: |
       always() &&
       needs.create-manifest.result == 'success' &&
-      github.event.inputs.force_rebuild_playwright != 'true'
+      github.event.inputs.force_rebuild_python != 'true'
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
 
@@ -460,8 +465,13 @@ jobs:
           # 检查镜像是否存在
           if docker manifest inspect ${IMAGE_NAME}:${VERSION} >/dev/null 2>&1; then
             echo "Image ${IMAGE_NAME}:${VERSION} already exists"
-            echo "Skipping Python build"
-            echo "should_build=false" >> $GITHUB_OUTPUT
+            if [ "${{ github.event.inputs.force_rebuild_python }}" == "true" ]; then
+              echo "Force rebuild enabled, proceeding with build"
+              echo "should_build=true" >> $GITHUB_OUTPUT
+            else
+              echo "Skipping Python build"
+              echo "should_build=false" >> $GITHUB_OUTPUT
+            fi
           else
             echo "Image ${IMAGE_NAME}:${VERSION} does not exist, proceeding with build"
             echo "should_build=true" >> $GITHUB_OUTPUT
@@ -475,7 +485,7 @@ jobs:
     if: |
       always() &&
       (
-        github.event.inputs.force_rebuild_playwright == 'true' ||
+        github.event.inputs.force_rebuild_python == 'true' ||
         needs.check-python-image.result == 'success' && needs.check-python-image.outputs.should_build == 'true'
       )
     strategy:
@@ -527,7 +537,7 @@ jobs:
     if: |
       always() &&
       (
-        github.event.inputs.force_rebuild_playwright == 'true' ||
+        github.event.inputs.force_rebuild_python == 'true' ||
         needs.build-python-runners.result == 'success'
       )
 
