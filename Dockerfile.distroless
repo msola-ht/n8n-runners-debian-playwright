@@ -76,11 +76,15 @@ RUN set -e; \
     "linux/arm64") FFMPEG_ARCH="arm64" ;; \
     *) echo "Unsupported platform: $TARGETPLATFORM" >&2; exit 1 ;; \
   esac; \
+  echo "Installing ffmpeg for ${FFMPEG_ARCH}..."; \
+  cd /tmp && \
   wget -q -O ffmpeg.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz && \
   tar -xf ffmpeg.tar.xz && \
-  mv ffmpeg-* ffmpeg && \
+  ls -la && \
+  mv ffmpeg-*/ffmpeg ffmpeg && \
   mv ffmpeg /usr/local/bin/ && \
-  rm -f ffmpeg.tar.xz
+  chmod +x /usr/local/bin/ffmpeg && \
+  rm -rf ffmpeg-* ffmpeg.tar.xz
 
 # Install additional Python packages
 RUN pip install --no-cache-dir markdown Pillow imageio-ffmpeg numpy
