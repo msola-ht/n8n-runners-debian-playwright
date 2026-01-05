@@ -70,18 +70,17 @@ RUN set -e; \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install ffmpeg based on architecture
-RUN case ${TARGETARCH} in \
-    amd64) \
-    wget -O ffmpeg.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz ;; \
-    arm64) \
-    wget -O ffmpeg.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz ;; \
-    *) \
-    echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
-    esac && \
-    tar -xf ffmpeg.tar.xz && \
-    mv ffmpeg-* ffmpeg && \
-    mv ffmpeg /usr/local/bin/ && \
-    rm -f ffmpeg.tar.xz
+RUN set -e; \
+  case "$TARGETPLATFORM" in \
+    "linux/amd64") FFMPEG_ARCH="amd64" ;; \
+    "linux/arm64") FFMPEG_ARCH="arm64" ;; \
+    *) echo "Unsupported platform: $TARGETPLATFORM" >&2; exit 1 ;; \
+  esac; \
+  wget -q -O ffmpeg.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz && \
+  tar -xf ffmpeg.tar.xz && \
+  mv ffmpeg-* ffmpeg && \
+  mv ffmpeg /usr/local/bin/ && \
+  rm -f ffmpeg.tar.xz
 
 # Install additional Python packages
 RUN pip install --no-cache-dir markdown Pillow imageio-ffmpeg numpy
