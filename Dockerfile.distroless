@@ -69,22 +69,12 @@ RUN set -e; \
   cd / && rm -rf /tmp/uv && \
   apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Install ffmpeg based on architecture
+# Install ffmpeg and additional Python packages
 RUN set -e; \
-  case "$TARGETPLATFORM" in \
-    "linux/amd64") FFMPEG_ARCH="amd64" ;; \
-    "linux/arm64") FFMPEG_ARCH="arm64" ;; \
-    *) echo "Unsupported platform: $TARGETPLATFORM" >&2; exit 1 ;; \
-  esac; \
-  echo "Installing ffmpeg for ${FFMPEG_ARCH}..."; \
-  cd /tmp && \
-  wget -q -O ffmpeg.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-${FFMPEG_ARCH}-static.tar.xz && \
-  tar -xf ffmpeg.tar.xz && \
-  ls -la && \
-  mv ffmpeg-*/ffmpeg ffmpeg && \
-  mv ffmpeg /usr/local/bin/ && \
-  chmod +x /usr/local/bin/ffmpeg && \
-  rm -rf ffmpeg-* ffmpeg.tar.xz
+  apt-get update && \
+  apt-get install -y --no-install-recommends ffmpeg && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/*
 
 # Install additional Python packages
 RUN pip install --no-cache-dir markdown Pillow imageio-ffmpeg numpy
@@ -159,8 +149,8 @@ COPY --from=python-runner-builder /usr/local/lib/libpython3.13.so* /runtime/usr/
 COPY --from=python-runner-builder /lib/*-linux-gnu* /runtime/lib/
 COPY --from=python-runner-builder /usr/lib/*-linux-gnu* /runtime/usr/lib/
 
-# Copy ffmpeg binary
-COPY --from=python-runner-builder /usr/local/bin/ffmpeg /runtime/usr/local/bin/ffmpeg
+# Copy ffmpeg binary and dependencies
+COPY --from=python-runner-builder /usr/bin/ffmpeg /runtime/usr/bin/ffmpeg
 
 # Copy Node.js runtime
 COPY --from=node-debian /usr/local/bin/node /runtime/usr/local/bin/node
