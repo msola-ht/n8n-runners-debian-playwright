@@ -148,11 +148,8 @@ jobs:
         id: pnpm-version
         working-directory: n8n-source
         run: |
-          # 读取 packageManager 字段，格式为 "pnpm@x.x.x"
           PACKAGE_MANAGER=$(node -p "require('./package.json').packageManager")
           echo "packageManager: $PACKAGE_MANAGER"
-
-          # 提取版本号
           PNPM_VERSION=$(echo "$PACKAGE_MANAGER" | sed 's/pnpm@//')
           echo "pnpm-version=$PNPM_VERSION" >> $GITHUB_OUTPUT
           echo "Detected pnpm version: $PNPM_VERSION"
@@ -167,16 +164,35 @@ jobs:
         with:
           version: ${{ steps.pnpm-version.outputs.pnpm-version }}
 
+      - name: Try to restore node modules from cache
+        id: cache-node
+        uses: actions/cache@v4
+        with:
+          path: n8n-source/node_modules
+          key: n8n-node-${{ needs.get-latest-version.outputs.n8n_version }}-${{ hashFiles('n8n-source/pnpm-lock.yaml') }}
+          restore-keys: |
+            n8n-node-${{ needs.get-latest-version.outputs.n8n_version }}-
+            n8n-node-
+
+      - name: Try to restore build output from cache
+        id: cache-dist
+        uses: actions/cache@v4
+        with:
+          path: n8n-source/dist
+          key: n8n-dist-${{ needs.get-latest-version.outputs.n8n_version }}
+
       - name: Install dependencies
+        if: steps.cache-node.outputs.cache-hit != 'true'
         working-directory: n8n-source
         run: |
-          echo "Installing dependencies with pnpm..."
+          echo "Cache miss - Installing dependencies with pnpm..."
           pnpm install --frozen-lockfile=false
 
       - name: Build n8n
+        if: steps.cache-dist.outputs.cache-hit != 'true'
         working-directory: n8n-source
         run: |
-          echo "Building n8n..."
+          echo "Cache miss - Building n8n..."
           pnpm build:n8n
 
       - name: Verify build output
@@ -190,6 +206,12 @@ jobs:
             echo "::error::task-runner-javascript directory not found in dist/"
             exit 1
           fi
+
+      - name: Build cache status
+        run: |
+          echo "### Cache Status :hammer_and_wrench:" >> $GITHUB_STEP_SUMMARY
+          echo "- Node modules: ${{ steps.cache-node.outputs.cache-hit == 'true' && '✅ Restored from cache' || '❌ Cache miss - Built from source' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Build output: ${{ steps.cache-dist.outputs.cache-hit == 'true' && '✅ Restored from cache' || '❌ Cache miss - Built from source' }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
