@@ -81,25 +81,15 @@ RUN pip install --no-cache-dir markdown Pillow imageio-ffmpeg numpy
 
 WORKDIR /app/task-runner-python
 
-COPY packages/@n8n/task-runner-python/pyproject.toml \
-     packages/@n8n/task-runner-python/uv.lock** \
-     packages/@n8n/task-runner-python/.python-version** \
-     ./
+COPY packages/@n8n/task-runner-python/ ./
 
-RUN uv venv
+# 创建虚拟环境并安装依赖
+RUN uv venv .venv
 RUN uv sync \
 			--frozen \
 			--no-editable \
-			--no-install-project \
 			--no-dev \
 			--all-extras
-
-COPY packages/@n8n/task-runner-python/ ./
-RUN uv sync \
-      --frozen \
-			--no-dev \
-			--all-extras \
-      --no-editable
 
 # ==============================================================================
 # STAGE 3: Task Runner Launcher download
