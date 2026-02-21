@@ -198,6 +198,13 @@ jobs:
           echo "Cache miss - Installing dependencies with pnpm..."
           pnpm install --frozen-lockfile
 
+      - name: Deduplicate dependencies
+        if: steps.cache-node.outputs.cache-hit != 'true'
+        working-directory: n8n-source
+        run: |
+          echo "Deduplicating dependencies to resolve version conflicts..."
+          pnpm dedupe
+
       - name: Build n8n
         if: steps.cache-dist.outputs.cache-hit != 'true'
         working-directory: n8n-source
