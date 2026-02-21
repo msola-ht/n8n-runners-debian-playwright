@@ -196,7 +196,7 @@ jobs:
         working-directory: n8n-source
         run: |
           echo "Cache miss - Installing dependencies with pnpm..."
-          pnpm install --frozen-lockfile=false
+          pnpm install --frozen-lockfile
 
       - name: Build n8n
         if: steps.cache-dist.outputs.cache-hit != 'true'
