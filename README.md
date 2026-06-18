@@ -19,31 +19,31 @@
 
 ```bash
 # 拉取镜像
-docker pull lunare/n8n-runners-debian:2.26.4stable
+docker pull lunare/n8n-runners-debian:2.26.6stable
 
 # 运行
 docker run -d \
   -e N8N_RUNNERS_AUTH_TOKEN=your-token \
   -e N8N_RUNNERS_TASK_BROKER_URI=http://your-n8n:5679 \
   -p 5680:5680 \
-  lunare/n8n-runners-debian:2.26.4stable
+  lunare/n8n-runners-debian:2.26.6stable
 ```
 
 ### 选择镜像
 
 **基础镜像** - 适合常规使用
 ```bash
-docker pull lunare/n8n-runners-debian:2.26.4stable
+docker pull lunare/n8n-runners-debian:2.26.6stable
 ```
 
 **Playwright 镜像** - 需要浏览器自动化时使用
 ```bash
-docker pull lunare/n8n-runners-playwright:2.26.4stable
+docker pull lunare/n8n-runners-playwright:2.26.6stable
 ```
 
 **Python 镜像** - 需要 numpy 等 Python 数据处理库时使用
 ```bash
-docker pull lunare/n8n-runners-python:2.26.4stable
+docker pull lunare/n8n-runners-python:2.26.6stable
 ```
 
 ### 离线安装
